@@ -76,23 +76,15 @@ src/
 }
 ```
 
-## 配置说明
+## 环境配置
 
-### AI 服务配置
-在使用 AI 助手功能前，需要在 `src/services/aiProviders.js` 中配置 API 密钥：
-
-```javascript
-export const AI_PROVIDERS = {
-  OPENAI: {
-    apiKey: 'your-openai-api-key',
-    // ...
-  },
-  DEEPSEEK: {
-    apiKey: 'your-deepseek-api-key',
-    // ...
-  }
-}
+1. 复制 `.env.example` 文件并重命名为 `.env`
+2. 在 `.env` 文件中填入你的 API 密钥：
+```env
+VUE_APP_OPENAI_API_KEY=your-openai-api-key
+VUE_APP_DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
+
 
 ## 开发计划
 - [ ] 添加数据导入/导出功能
@@ -117,12 +109,3 @@ MIT License
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 创建 Pull Request
-
-## 环境配置
-
-1. 复制 `.env.example` 文件并重命名为 `.env`
-2. 在 `.env` 文件中填入你的 API 密钥：
-```env
-VUE_APP_OPENAI_API_KEY=your-openai-api-key
-VUE_APP_DEEPSEEK_API_KEY=your-deepseek-api-key
-```
