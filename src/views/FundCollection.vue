@@ -1,61 +1,5 @@
 <template>
   <div class="fund-container">
-    <div class="stats-panel">
-      <div class="stats-card main-stats">
-        <div class="stats-header">
-          <h3>投资概览</h3>
-          <div class="total-profit" :class="{ 
-            'positive': totalProfit > 0,
-            'negative': totalProfit < 0 
-          }">
-            {{ totalProfit > 0 ? '+' : '' }}¥{{ totalProfit.toFixed(2) }}
-            <span class="profit-rate">{{ totalProfitRate.toFixed(2) }}%</span>
-          </div>
-        </div>
-        <div class="progress-section">
-          <div class="progress-info">
-            <span>投资进度</span>
-            <span>{{ (investmentProgress * 100).toFixed(1) }}%</span>
-          </div>
-          <div class="progress-bar">
-            <div 
-              class="progress-fill"
-              :style="{ width: `${investmentProgress * 100}%` }"
-            ></div>
-          </div>
-          <div class="progress-details">
-            <div class="detail-item">
-              <span class="label">已投入</span>
-              <span class="value">¥{{ totalCost.toFixed(2) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">计划投入</span>
-              <span class="value">¥{{ plannedInvestment.toFixed(2) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">剩余可投</span>
-              <span class="value highlight">¥{{ remainingInvestment.toFixed(2) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="quick-stats">
-        <div class="quick-stat-card">
-          <span class="stat-label">持仓基金</span>
-          <span class="stat-value">{{ funds.length }}</span>
-        </div>
-        <div class="quick-stat-card">
-          <span class="stat-label">交易次数</span>
-          <span class="stat-value">{{ totalTransactions }}</span>
-        </div>
-        <div class="quick-stat-card">
-          <span class="stat-label">月均投入</span>
-          <span class="stat-value">¥{{ monthlyAverage.toFixed(2) }}</span>
-        </div>
-      </div>
-    </div>
-
     <div class="fund-content">
       <div class="cards-grid">
         <div 
@@ -67,12 +11,15 @@
           <div class="card-content">
             <div class="card-header">
               <h3>{{ fund.name }}</h3>
-              <span class="price">¥{{ fund.currentPrice }}</span>
+              <span class="price">
+                <span class="price-label">估值:</span>
+                {{ fund.currentPrice }}
+              </span>
             </div>
             
             <div class="card-stats">
               <div class="stat-item">
-                <span class="label">收益</span>
+                <span class="label">总收益</span>
                 <span 
                   class="value"
                   :class="{ 
@@ -84,8 +31,25 @@
                 </span>
               </div>
               <div class="stat-item">
-                <span class="label">成本</span>
+                <span class="label">总成本</span>
                 <span class="value">¥{{ fund.totalCost }}</span>
+              </div>
+              <div class="stat-item daily-profit">
+                <span class="label">
+                  {{ formatDate(fund.lastUpdateDate || new Date()) }}收益
+                </span>
+                <span 
+                  class="value"
+                  :class="{ 
+                    'positive': Number(fund.dailyProfit) > 0,
+                    'negative': Number(fund.dailyProfit) < 0
+                  }"
+                >
+                  {{ fund.dailyProfit > 0 ? '+' : '' }}¥{{ calculateDailyProfit(fund).toFixed(2) }}
+                  <span class="daily-rate">
+                    {{ fund.dailyProfit > 0 ? '+' : '' }}{{ calculateDailyRate(fund).toFixed(2) }}%
+                  </span>
+                </span>
               </div>
             </div>
 
@@ -156,68 +120,28 @@ function handleAdd(data) {
   }
 }
 
-const totalProfit = computed(() => {
-  return funds.value.reduce((sum, fund) => {
-    // 计算每个基金的实际收益
-    const profit = fund.fundRecords.reduce((fundSum, record) => {
-      const currentValue = Number(record.shares) * Number(fund.currentPrice)
-      const cost = Number(record.amount)
-      return fundSum + (currentValue - cost)
-    }, 0)
-    return sum + profit
-  }, 0)
-})
+// 计算当日收益
+function calculateDailyProfit(fund) {
+  const totalShares = fund.fundRecords.reduce((sum, record) => 
+    sum + Number(record.shares), 0)
+  const priceDiff = Number(fund.currentPrice) - Number(fund.previousPrice || fund.currentPrice)
+  return totalShares * priceDiff
+}
 
-const totalCost = computed(() => {
-  return funds.value.reduce((sum, fund) => {
-    // 计算每个基金的实际成本（包含所有交易记录）
-    const fundCost = fund.fundRecords.reduce((fundSum, record) => {
-      return fundSum + Number(record.amount)
-    }, 0)
-    return sum + fundCost
-  }, 0)
-})
+// 计算当日收益率
+function calculateDailyRate(fund) {
+  if (!fund.previousPrice) return 0
+  return ((Number(fund.currentPrice) - Number(fund.previousPrice)) / Number(fund.previousPrice)) * 100
+}
 
-const totalProfitRate = computed(() => {
-  if (!totalCost.value) return 0
-  return (totalProfit.value / totalCost.value) * 100
-})
-
-// 设置计划投资金额（这个值可以从配置或用户设置获取）
-const plannedInvestment = ref(100000)
-
-const remainingInvestment = computed(() => {
-  return Math.max(0, plannedInvestment.value - totalCost.value)
-})
-
-const investmentProgress = computed(() => {
-  if (!plannedInvestment.value) return 0
-  return Math.min(totalCost.value / plannedInvestment.value, 1)
-})
-
-const totalTransactions = computed(() => {
-  return funds.value.reduce((sum, fund) => sum + fund.fundRecords.length, 0)
-})
-
-const monthlyAverage = computed(() => {
-  if (!totalTransactions.value) return 0
-  
-  // 获取最早和最新交易日期
-  const dates = funds.value.flatMap(fund => 
-    fund.fundRecords.map(record => new Date(record.date))
-  )
-  
-  if (!dates.length) return 0
-  
-  const earliestDate = new Date(Math.min(...dates))
-  const latestDate = new Date(Math.max(...dates))
-  
-  // 计算月份差
-  const months = (latestDate.getFullYear() - earliestDate.getFullYear()) * 12 +
-    (latestDate.getMonth() - earliestDate.getMonth()) + 1
-  
-  return totalCost.value / Math.max(months, 1)
-})
+// 添加日期格式化函数
+function formatDate(date) {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 </script>
 
 <style scoped>
@@ -275,6 +199,15 @@ const monthlyAverage = computed(() => {
   font-size: 20px;
   font-weight: 500;
   color: #2196f3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.price-label {
+  font-size: 12px;
+  font-weight: normal;
+  color: #999;
 }
 
 .card-stats {
@@ -339,7 +272,7 @@ const monthlyAverage = computed(() => {
 }
 
 .stats-panel {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .stats-card {
@@ -350,7 +283,7 @@ const monthlyAverage = computed(() => {
 }
 
 .main-stats {
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .stats-header {
@@ -440,30 +373,22 @@ const monthlyAverage = computed(() => {
   color: #2196f3;
 }
 
-.quick-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+.daily-profit {
+  grid-column: 1 / -1;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+  margin-top: 4px;
 }
 
-.quick-stat-card {
-  background: white;
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.daily-rate {
+  font-size: 12px;
+  margin-left: 8px;
+  opacity: 0.8;
 }
 
-.stat-label {
-  font-size: 14px;
+.daily-profit .label {
+  font-size: 12px;
   color: #666;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: 500;
-  color: #333;
+  white-space: nowrap;
 }
 </style> 
