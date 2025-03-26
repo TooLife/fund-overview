@@ -1,5 +1,13 @@
 <template>
   <div class="fund-container">
+    <div v-if="loading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+    </div>
+
+    <div v-if="error" class="error-message">
+      {{ error }}
+    </div>
+
     <div class="fund-content">
       <div class="cards-grid">
         <div 
@@ -14,6 +22,13 @@
               <span class="price">
                 <span class="price-label">估值:</span>
                 {{ fund.currentPrice }}
+                <button 
+                  class="refresh-btn"
+                  @click.stop="refreshEstimate(fund.name)"
+                  :class="{ 'rotating': isRefreshing[fund.name] }"
+                >
+                  ⟳
+                </button>
               </span>
             </div>
             
@@ -55,7 +70,7 @@
 
             <div class="card-footer">
               <span class="records-count">
-                {{ fund.fundRecords.length }} 笔交易
+                {{ fund.numOfTransactions }} 笔交易
               </span>
             </div>
           </div>
@@ -80,20 +95,58 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import FundDetail from './FundDetail.vue'
 import FundAI from '../components/FundAI.vue'
 import FundAdd from '../components/FundAdd.vue'
-import fundsData from '../assets/data/funds.json'
+import { getFunds, getFundEstimate } from '../services/fundService'
 
 const router = useRouter()
-const funds = ref(fundsData.funds)
+const funds = ref([])
 const selectedFund = ref('')
+const loading = ref(true)
+const error = ref(null)
+const isRefreshing = ref({})
 
-const selectedFundRecords = computed(() => {
-  const fund = funds.value.find(f => f.name === selectedFund.value)
-  return fund ? fund.fundRecords : []
+// 获取基金列表
+async function loadFunds() {
+  try {
+    loading.value = true
+    const data = await getFunds()
+    funds.value = data
+  } catch (err) {
+    error.value = '加载基金数据失败'
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 刷新估值
+async function refreshEstimate(fundName) {
+  if (isRefreshing.value[fundName]) return
+  
+  isRefreshing.value[fundName] = true
+  try {
+    const fund = funds.value.find(f => f.name === fundName)
+    if (fund) {
+      const estimateData = await getFundEstimate(fund.code)
+      fund.estimatedPrice = estimateData.price
+      fund.estimatedTime = estimateData.time
+      fund.previousPrice = fund.currentPrice
+      fund.currentPrice = estimateData.price
+    }
+  } catch (error) {
+    console.error('获取估值失败:', error)
+  } finally {
+    isRefreshing.value[fundName] = false
+  }
+}
+
+// 初始化加载
+onMounted(() => {
+  loadFunds()
 })
 
 function handleFundSelect(fundName) {
@@ -113,19 +166,14 @@ function handleAdd(data) {
   } else {
     const fund = funds.value.find(f => f.name === data.fundName)
     if (fund) {
-      fund.fundRecords.push(data.record)
-      fund.totalCost = fund.fundRecords.reduce((sum, r) => sum + Number(r.amount), 0)
       fund.currentPrice = data.record.price
     }
   }
 }
 
 // 计算当日收益
-function calculateDailyProfit(fund) {
-  const totalShares = fund.fundRecords.reduce((sum, record) => 
-    sum + Number(record.shares), 0)
-  const priceDiff = Number(fund.currentPrice) - Number(fund.previousPrice || fund.currentPrice)
-  return totalShares * priceDiff
+function calculateDailyProfit() {
+  return 0
 }
 
 // 计算当日收益率
@@ -201,7 +249,7 @@ function formatDate(date) {
   color: #2196f3;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 .price-label {
@@ -390,5 +438,70 @@ function formatDate(date) {
   font-size: 12px;
   color: #666;
   white-space: nowrap;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.error-message {
+  padding: 16px;
+  background: #ffebee;
+  color: #c62828;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.refresh-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.refresh-btn:hover {
+  background: #f5f5f5;
+  color: #2196f3;
+}
+
+.refresh-btn.rotating {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style> 
